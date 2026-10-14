@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>跨文件 AI 核對示範｜製令 × 報關單 × 檢驗報告</title>
+<style>
+:root{--ink:#1f2a37;--sub:#5b6675;--line:#d5dbe3;--bg:#f6f8fb;--card:#fff;--deep:#1e3a5f;--tint:#eef2f7;--ok:#1f6e52;--okbg:#e7f4ee;--bad:#a8412f;--badbg:#fbeae6;--warn:#8a5a00;--warnbg:#fff4e0;--gray:#6b7280;--graybg:#f1f2f4}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.6 -apple-system,"Segoe UI","Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif}
+header{background:var(--deep);color:#fff;padding:22px 24px}
+header h1{margin:0 0 6px;font-size:22px}
+header p{margin:0;opacity:.92;max-width:960px}
+.tag{display:inline-block;font-size:12px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.18);margin:8px 6px 0 0}
+.wrap{max-width:1200px;margin:0 auto;padding:18px 16px 40px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.card h2{margin:0 0 4px;font-size:16px}
+.hint{color:var(--sub);font-size:12.5px;margin:0 0 10px}
+.ctrl{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end}
+.ctrl label{font-size:13px;display:flex;flex-direction:column;gap:4px}
+select,input[type=number],input[type=text]{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+input[type=range]{width:200px}
+.docs{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:960px){.docs{grid-template-columns:1fr}}
+.doc{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.doc h3{margin:0;padding:8px 12px;background:var(--tint);font-size:14px}
+.doc h3 small{color:var(--sub);font-weight:400;margin-left:6px}
+.f{display:grid;grid-template-columns:86px 1fr 62px;gap:6px;align-items:center;padding:5px 10px;border-top:1px solid var(--tint)}
+.f label{font-size:12.5px;color:var(--sub)}
+.f input[type=text]{width:100%;padding:3px 6px;font-size:13px}
+.f input.cf{width:58px;padding:3px 4px;font-size:12px;text-align:right}
+.f.low{background:var(--warnbg)}
+.f.bad input[type=text]{border-color:var(--bad);background:var(--badbg)}
+.hw{font-size:10.5px;color:var(--warn);margin-left:4px}
+.sum{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 10px}
+.sum div{flex:1;min-width:120px;border-radius:8px;padding:8px 10px}
+.sum b{display:block;font-size:22px}
+.sum span{font-size:12px}
+.s-ok{background:var(--okbg);color:var(--ok)}.s-bad{background:var(--badbg);color:var(--bad)}.s-low{background:var(--warnbg);color:var(--warn)}.s-miss{background:var(--graybg);color:var(--gray)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{border-bottom:1px solid var(--tint);padding:6px 8px;text-align:left;vertical-align:top}
+th{background:var(--tint)}
+.pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap}
+.tw{overflow-x:auto}
+textarea{width:100%;height:120px;font:12px/1.5 Consolas,Menlo,monospace;border:1px solid var(--line);border-radius:6px;padding:8px}
+button{font:inherit;padding:6px 12px;border:1px solid var(--deep);background:var(--deep);color:#fff;border-radius:6px;cursor:pointer}
+button.ghost{background:#fff;color:var(--deep)}
+footer .card{font-size:13px}
+footer h3{margin:12px 0 4px;font-size:14px}
+footer ul{margin:4px 0;padding-left:20px}
+.sig{margin-top:12px;color:var(--sub)}
+</style>
+</head>
+<body>
+<header>
+ <h1>跨文件 AI 核對示範：製令 × 報關單 × 檢驗報告</h1>
+ <p>假設三份掃描文件已經過 OCR，每個欄位都有擷取值與信心分數。下面示範核對怎麼做：信心不足的欄位不拿來下判斷，改標「需人工確認」；能判斷的部分用明確規則勾稽，結果可以重現、可以稽核。所有欄位都能直接改，報告會即時重算。</p>
+ <span class="tag">投標用概念示意</span><span class="tag">資料全為虛構</span><span class="tag">未呼叫任何 OCR 或模型</span>
+</header>
+<div class="wrap">
+ <section class="card">
+  <h2>情境與參數</h2>
+  <p class="hint">先選一個情境，再調信心門檻與容許誤差，看同一批資料的結論怎麼改變。</p>
+  <div class="ctrl">
+   <label>情境
+    <select id="scenario">
+     <option value="ok">三份文件一致</option>
+     <option value="lot">批號一字之差（抄寫錯誤）</option>
+     <option value="hand">手寫數量字跡模糊</option>
+     <option value="spec">檢驗值超出規格</option>
+     <option value="hs">報關單缺稅號、金額對不上</option>
+    </select>
+   </label>
+   <label>信心門檻 <span id="thrV"></span>
+    <input type="range" id="thr" min="0.50" max="0.99" step="0.01" value="0.85">
+   </label>
+   <label>數量容許誤差（%）
+    <input type="number" id="tol" min="0" max="10" step="0.5" value="1">
+   </label>
+   <button type="button" class="ghost" id="reset">還原此情境</button>
+  </div>
+ </section>
+
+ <section class="card">
+  <h2>OCR 擷取結果（可直接修改值與信心分數）</h2>
+  <p class="hint">黃底＝信心低於門檻；紅框＝參與了不符的核對。標「手寫」的欄位信心通常較低。</p>
+  <div class="docs" id="docs"></div>
+ </section>
+
+ <section class="card">
+  <h2>核對結果差異報告</h2>
+  <div class="sum" id="sum"></div>
+  <div class="tw"><table><thead><tr><th style="width:150px">核對項目</th><th style="width:110px">結果</th><th>比對內容</th><th>說明</th></tr></thead><tbody id="report"></tbody></table></div>
+  <p style="margin:12px 0 6px"><button type="button" id="exp">產生 CSV（可貼進 Excel）</button></p>
+  <textarea id="csv" readonly aria-label="差異報告 CSV"></textarea>
+ </section>
+</div>
+<footer class="wrap" style="padding-top:0">
+ <div class="card">
+  <h3>誠實聲明</h3>
+  <p>這是投標用的概念示意，用來說明我對「擷取」與「核對」分層的做法。所有品名、批號、數量、稅號、檢驗值都是虛構的，不是任何客戶的文件，也不是已完成的產品。</p>
+  <h3>這頁裡是模擬的</h3>
+  <ul>
+   <li>沒有真的做 OCR，也沒有呼叫任何語言模型；擷取值與信心分數是預先寫好的示範資料，或你手動改的值。</li>
+   <li>不顯示原始掃描影像；正式系統會在旁邊放原圖並標出欄位位置。</li>
+  </ul>
+  <h3>這頁裡真的在跑的邏輯</h3>
+  <ul>
+   <li>八條核對規則（品名、批號、數量、含水率、純度、報關金額、稅號、檢驗日期順序）都是即時計算的；改任何一個值、門檻或容許誤差，報告與計數都會重算。</li>
+   <li>任何參與核對的欄位信心低於門檻，該項就判為「需人工確認」，不會硬給通過或不符。缺值判為「缺漏」。</li>
+   <li>批號比對會先去除空白與連字號再比；若只差一個字元，會特別註明「疑似抄寫錯誤」。</li>
+  </ul>
+  <h3>實際導入會怎麼做</h3>
+  <ul>
+   <li>印刷體用雲端文件辨識服務，手寫欄位用貴司真實樣本量準確率後再決定方案；若文件不能出廠，改評估地端模型。</li>
+   <li>語言模型只負責欄位對位（不同寫法的欄名對到同一欄）與模糊比對，輸出一律過資料結構驗證；勾稽判斷維持明確規則。</li>
+   <li>先做 PoC：三類文件各 20–30 份樣本，逐欄位算出準確率與需人工比例，用數字決定能否上線。</li>
+  </ul>
+  <p class="sig">劉佳政 · LINE i100263340 · i100263340@gmail.com</p>
+ </div>
+</footer>
+<script>
+(function(){
+ 'use strict';
+ var DOCS = [
+  {id:'wo', name:'生產製令', sub:'Work Order', fields:[
+   {k:'item', n:'品名'}, {k:'lot', n:'批號'}, {k:'qty', n:'計畫數量(kg)'}, {k:'date', n:'生產日期'}]},
+  {id:'cd', name:'進口報關單', sub:'Customs', fields:[
+   {k:'item', n:'品名'}, {k:'lot', n:'批號'}, {k:'qty', n:'申報數量(kg)', hw:true}, {k:'price', n:'單價(USD/kg)'}, {k:'amt', n:'申報金額(USD)'}, {k:'hs', n:'稅號'}]},
+  {id:'coa', name:'檢驗報告', sub:'COA', fields:[
+   {k:'item', n:'品名'}, {k:'lot', n:'批號'}, {k:'moist', n:'含水率(%)', hw:true}, {k:'purity', n:'純度(%)'}, {k:'date', n:'檢驗日期'}]}
+ ];
+ var SPEC = {moistMax:0.50, purityMin:99.0};
+
+ function base(){
+  return {
+   wo:{item:['無水檸檬酸 30-100 目',0.98], lot:['CA-2609-017',0.97], qty:['1200',0.96], date:['2026-09-12',0.98]},
+   cd:{item:['無水檸檬酸 30-100目',0.95], lot:['CA2609-017',0.93], qty:['1200',0.91], price:['1.35',0.97], amt:['1620.00',0.97], hs:['2918.14.00',0.96]},
+   coa:{item:['無水檸檬酸 30-100 目',0.96], lot:['CA-2609-017',0.95], moist:['0.21',0.90], purity:['99.6',0.97], date:['2026-09-15',0.98]}
+  };
+ }
+ function scenario(s){
+  var d = base();
+  if (s==='lot'){ d.coa.lot = ['CA-2609-071',0.94]; }
+  if (s==='hand'){ d.cd.qty = ['1260',0.62]; }
+  if (s==='spec'){ d.coa.moist = ['0.68',0.92]; d.coa.purity = ['98.7',0.95]; }
+  if (s==='hs'){ d.cd.hs = ['',0]; d.cd.amt = ['1782.00',0.96]; }
+  return d;
+ }
+
+ var DATA = scenario('ok');
+ function $(id){ return document.getElementById(id); }
+ function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+ function thr(){ return parseFloat($('thr').value); }
+ function tol(){ var v = parseFloat($('tol').value); return isNaN(v) ? 0 : Math.max(0, v); }
+ function norm(s){ return String(s).replace(/[\s\-_]/g,'').toUpperCase(); }
+ function num(s){ var v = parseFloat(String(s).replace(/,/g,'')); return isNaN(v) ? null : v; }
+
+ function renderDocs(){
+  var h = '';
+  for (var i=0;i<DOCS.length;i++){
+   var D = DOCS[i];
+   h += '<div class="doc"><h3>'+esc(D.name)+'<small>'+esc(D.sub)+'</small></h3>';
+   for (var j=0;j<D.fields.length;j++){
+    var F = D.fields[j], v = DATA[D.id][F.k];
+    h += '<div class="f" data-cell="'+D.id+'.'+F.k+'"><label>'+esc(F.n)+(F.hw?'<span class="hw">手寫</span>':'')+'</label>'+
+      '<input type="text" data-d="'+D.id+'" data-k="'+F.k+'" data-t="v" value="'+esc(v[0])+'" aria-label="'+esc(D.name+' '+F.n)+'">'+
+      '<input class="cf" type="number" min="0" max="1" step="0.01" data-d="'+D.id+'" data-k="'+F.k+'" data-t="c" value="'+v[1].toFixed(2)+'" aria-label="'+esc(D.name+' '+F.n+' 信心')+'"></div>';
+   }
+   h += '</div>';
+  }
+  $('docs').innerHTML = h;
+  var ins = $('docs').querySelectorAll('input');
+  for (var x=0;x<ins.length;x++){
+   ins[x].addEventListener('input', function(e){
+    var t = e.target, cell = DATA[t.getAttribute('data-d')][t.getAttribute('data-k')];
+    if (t.getAttribute('data-t')==='v') cell[0] = t.value;
+    else { var c = parseFloat(t.value); cell[1] = isNaN(c) ? 0 : Math.min(1, Math.max(0, c)); }
+    compute();
+   });
+  }
+ }
+
+ // each check: list of cells used, and fn returning {st:'ok'|'bad', cmp, why}
+ function checks(){
+  var T = tol();
+  return [
+   {name:'品名一致', cells:['wo.item','cd.item','coa.item'], fn:function(v){
+     var a=norm(v[0]), b=norm(v[1]), c=norm(v[2]);
+     var ok = a===b && b===c;
+     return {st: ok?'ok':'bad', cmp: v.join(' ／ '), why: ok?'去除空白後三份相同':'品名寫法不同，需確認是否同一品項'};
+   }},
+   {name:'批號勾稽', cells:['wo.lot','cd.lot','coa.lot'], fn:function(v){
+     var a=norm(v[0]), b=norm(v[1]), c=norm(v[2]);
+     if (a===b && b===c) return {st:'ok', cmp:v.join(' ／ '), why:'去除連字號後三份相同'};
+     var off = [];
+     if (a!==b) off.push('報關單'); if (a!==c) off.push('檢驗報告');
+     var one = (a!==c && diff1(a,c)) || (a!==b && diff1(a,b));
+     return {st:'bad', cmp:v.join(' ／ '), why: off.join('、')+'與製令批號不同'+(one?'；只差一個字元，疑似抄寫錯誤':'')};
+   }},
+   {name:'數量比對', cells:['wo.qty','cd.qty'], fn:function(v){
+     var a=num(v[0]), b=num(v[1]);
+     if (a===null||b===null) return {st:'bad', cmp:v.join(' vs '), why:'數量不是有效數字'};
+     var pct = a===0 ? 100 : Math.abs(b-a)/a*100;
+     var ok = pct <= T + 1e-9;
+     return {st: ok?'ok':'bad', cmp: a+' kg vs '+b+' kg', why:'差異 '+pct.toFixed(2)+'%，容許 '+T+'%'};
+   }},
+   {name:'規格：含水率', cells:['coa.moist'], fn:function(v){
+     var m=num(v[0]); if (m===null) return {st:'bad', cmp:v[0], why:'不是有效數字'};
+     return {st: m<=SPEC.moistMax?'ok':'bad', cmp: m+'%', why:'規格上限 '+SPEC.moistMax.toFixed(2)+'%'};
+   }},
+   {name:'規格：純度', cells:['coa.purity'], fn:function(v){
+     var p=num(v[0]); if (p===null) return {st:'bad', cmp:v[0], why:'不是有效數字'};
+     return {st: p>=SPEC.purityMin?'ok':'bad', cmp: p+'%', why:'規格下限 '+SPEC.purityMin.toFixed(1)+'%'};
+   }},
+   {name:'報關金額邏輯', cells:['cd.qty','cd.price','cd.amt'], fn:function(v){
+     var q=num(v[0]), p=num(v[1]), a=num(v[2]);
+     if (q===null||p===null||a===null) return {st:'bad', cmp:v.join(' / '), why:'有欄位不是有效數字'};
+     var exp = q*p, pct = exp===0?100:Math.abs(a-exp)/exp*100;
+     return {st: pct<=1?'ok':'bad', cmp: q+' × '+p+' = '+exp.toFixed(2)+'，申報 '+a.toFixed(2), why:'差異 '+pct.toFixed(2)+'%，容許 1%'};
+   }},
+   {name:'稅號必填', cells:['cd.hs'], fn:function(v){
+     var ok = /^\d{4}\.\d{2}\.\d{2}$/.test(String(v[0]).trim());
+     return {st: ok?'ok':'bad', cmp: v[0]||'（空白）', why: ok?'格式 XXXX.XX.XX':'格式不符'};
+   }},
+   {name:'日期順序', cells:['wo.date','coa.date'], fn:function(v){
+     var a=Date.parse(v[0]), b=Date.parse(v[1]);
+     if (isNaN(a)||isNaN(b)) return {st:'bad', cmp:v.join(' → '), why:'日期格式無法解析'};
+     return {st: b>=a?'ok':'bad', cmp: v[0]+' → '+v[1], why: b>=a?'檢驗在生產之後':'檢驗日期早於生產日期'};
+   }}
+  ];
+ }
+ function diff1(a,b){
+  if (a.length!==b.length) return false;
+  var d=0; for (var i=0;i<a.length;i++){ if (a.charAt(i)!==b.charAt(i)) d++; }
+  if (d===1) return true;
+  if (d===2){ for (var j=0;j<a.length-1;j++){ if (a.charAt(j)===b.charAt(j+1) && a.charAt(j+1)===b.charAt(j) && a.charAt(j)!==b.charAt(j)) return true; } }
+  return false;
+ }
+
+ var LAST = [];
+ function compute(){
+  var T = thr();
+  $('thrV').textContent = T.toFixed(2);
+  var cs = checks(), rows = '', cnt = {ok:0,bad:0,low:0,miss:0}, badCells = {}, lowCells = {};
+  LAST = [];
+  for (var i=0;i<cs.length;i++){
+   var c = cs[i], vals = [], low = [], miss = [];
+   for (var j=0;j<c.cells.length;j++){
+    var p = c.cells[j].split('.'), cell = DATA[p[0]][p[1]];
+    vals.push(cell[0]);
+    if (String(cell[0]).trim()==='') miss.push(c.cells[j]);
+    else if (cell[1] < T) low.push(c.cells[j]);
+   }
+   var st, cmp, why;
+   if (miss.length){ st='miss'; cmp=vals.join(' ／ '); why='缺漏：'+miss.map(lab).join('、'); }
+   else if (low.length){ st='low'; cmp=vals.join(' ／ '); why='信心低於 '+T.toFixed(2)+'：'+low.map(lab).join('、')+'，不下判斷'; for (var a=0;a<low.length;a++) lowCells[low[a]]=1; }
+   else { var r = c.fn(vals); st=r.st; cmp=r.cmp; why=r.why; if (st==='bad'){ for (var b=0;b<c.cells.length;b++) badCells[c.cells[b]]=1; } }
+   cnt[st]++;
+   var pill = {ok:['通過','s-ok'], bad:['不符','s-bad'], low:['需人工確認','s-low'], miss:['缺漏','s-miss']}[st];
+   rows += '<tr><td>'+esc(c.name)+'</td><td><span class="pill '+pill[1]+'">'+pill[0]+'</span></td><td>'+esc(cmp)+'</td><td>'+esc(why)+'</td></tr>';
+   LAST.push([c.name, pill[0], cmp, why]);
+  }
+  $('report').innerHTML = rows;
+  $('sum').innerHTML =
+   '<div class="s-ok"><b>'+cnt.ok+'</b><span>通過</span></div>'+
+   '<div class="s-bad"><b>'+cnt.bad+'</b><span>不符</span></div>'+
+   '<div class="s-low"><b>'+cnt.low+'</b><span>需人工確認</span></div>'+
+   '<div class="s-miss"><b>'+cnt.miss+'</b><span>缺漏</span></div>';
+  var fs = $('docs').querySelectorAll('.f');
+  for (var x=0;x<fs.length;x++){
+   var key = fs[x].getAttribute('data-cell'), p2 = key.split('.'), cell2 = DATA[p2[0]][p2[1]];
+   fs[x].className = 'f' + (cell2[1] < T && String(cell2[0]).trim()!=='' ? ' low' : '') + (badCells[key] ? ' bad' : '');
+  }
+  $('csv').value = '';
+ }
+ function lab(path){
+  var p = path.split('.');
+  for (var i=0;i<DOCS.length;i++){ if (DOCS[i].id===p[0]){ for (var j=0;j<DOCS[i].fields.length;j++){ if (DOCS[i].fields[j].k===p[1]) return DOCS[i].name+'「'+DOCS[i].fields[j].n+'」'; } } }
+  return path;
+ }
+ function csvCell(s){ s = String(s); return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s; }
+
+ $('scenario').addEventListener('change', function(){ DATA = scenario(this.value); renderDocs(); compute(); });
+ $('reset').addEventListener('click', function(){ DATA = scenario($('scenario').value); renderDocs(); compute(); });
+ $('thr').addEventListener('input', compute);
+ $('tol').addEventListener('input', compute);
+ $('exp').addEventListener('click', function(){
+  var lines = ['核對項目,結果,比對內容,說明'];
+  for (var i=0;i<LAST.length;i++) lines.push(LAST[i].map(csvCell).join(','));
+  $('csv').value = lines.join('\n');
+ });
+ renderDocs(); compute();
+})();
+</script>
+</body>
+</html>
